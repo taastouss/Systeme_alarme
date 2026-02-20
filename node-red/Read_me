@@ -1,0 +1,172 @@
+# Node-RED – Module de Supervision et de Traitement
+
+##  Rôle dans l’Architecture Globale
+
+Node-RED constitue la couche logicielle de traitement des données satellite.
+
+Il assure :
+
+- La réception des trames uplink via MQTT
+- Le décodage du payload encodé en Base64
+- L’interprétation structurée des événements
+- La validation temporelle des alertes
+- La gestion d’état (anti-spam)
+- La génération d’alertes email
+- La supervision en temps réel via Dashboard
+
+---
+
+## Architecture Logique du Flow
+
+```
+MQTT IN
+   ↓
+Décodage Base64
+   ↓
+Parsing & Structuration des données
+   ↓
+Logique décisionnelle (State Management)
+   ↓
+Système d’alerte (Email)
+   ↓
+Dashboard de supervision
+```
+
+---
+
+##  Réception des Données
+
+- Topic MQTT : `cma/echo/117a62/uplink`
+- Les trames reçues contiennent un champ `frmPayload`
+- Ce champ est encodé en Base64
+
+Exemple reçu :
+
+```
+"FEU,153,40.6"
+"SOS,28.1"
+"ALIVE"
+
+
+## 🔍 Décodage et Structuration
+
+1. Conversion Base64 → UTF-8
+2. Séparation des champs par virgule
+3. Création d’un objet structuré :
+
+json
+{
+  "event": "FEU",
+  "state": "FEU",
+  "angle": 153,
+  "temperature": 40.6,
+  "timestamp": "ISO-8601"
+}
+
+
+##  Logique Décisionnelle
+
+###  Détection FEU
+
+Condition stricte :
+
+- Température > 32°C
+- Condition maintenue pendant ≥ 3 secondes consécutives
+- Validation temporelle via `context`
+- Envoi d’un seul email par événement confirmé
+
+Objectif : élimination des faux positifs thermiques instantanés.
+
+---
+
+###  Gestion SOS
+
+- Envoi immédiat d’un email
+- Blocage des envois répétés
+- Réinitialisation uniquement si l’état change
+
+Implémentation via variable mémoire :
+
+```
+context.set("sosSent", true)
+```
+
+---
+
+###  ALIVE
+
+- Indique fonctionnement normal
+- Aucun envoi d’alerte
+- Réinitialise l’état SOS si actif
+
+---
+
+## Dashboard
+
+Interface temps réel affichant :
+
+- Température
+- Angle de balayage
+- État système (ALIVE / SOS / FEU)
+- Indicateur visuel d’alerte
+
+Accès local :
+```
+http://localhost:1880/ui
+```
+
+Accès distant possible via tunnel sécurisé.
+
+---
+
+## Système d’Alerte
+
+- SMTP sécurisé (Gmail – port 465)
+- Authentification par mot de passe d’application
+- Un seul mail par événement validé
+- Protection anti-spam intégrée
+
+---
+
+##  Gestion d’État
+
+Utilisation de la mémoire interne Node-RED :
+
+- `sosSent`
+- `feuStartTime`
+
+Permet :
+
+- Validation temporelle
+- Évitement des notifications multiples
+- Robustesse événementielle
+
+---
+
+##  Robustesse du Système
+
+- Filtrage des pics thermiques courts
+- Reset automatique si température redescend
+- Architecture orientée événements (event-driven)
+- Séparation claire acquisition / logique / notification
+
+---
+
+## Technologies Utilisées
+
+- Node-RED
+- MQTT
+- JavaScript
+- Node-RED Dashboard
+- SMTP sécurisé
+
+---
+
+##  Conclusion
+
+Le module Node-RED assure la couche d’intelligence du système FireScan en garantissant :
+
+- Fiabilité des alertes
+- Réduction des faux positifs
+- Supervision en temps réel
+- Automatisation complète des notifications
